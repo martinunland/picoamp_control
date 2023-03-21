@@ -10,7 +10,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         # List the packages required for your library here, e.g.
-         'visa',
+         'pyvisa',
          'numpy'
     ],
     python_requires='>=3.6',
