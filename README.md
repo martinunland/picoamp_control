@@ -4,7 +4,8 @@ PicoampControl was created to control the KEITHLEY picoampere meter 6482.
 
 ## Installation
 This library uses pyvisa. You need to install NI-VISA, follow https://pyvisa.readthedocs.io/en/latest/introduction/getting.html#backend
-You can install the library using pip:
+
+To install the library use pip:
 
 ```bash
 pip install git+https://github.com/martinunland/picoamp_control.git
