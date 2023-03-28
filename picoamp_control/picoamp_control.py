@@ -130,7 +130,7 @@ class PicoampControl:
         
         return instrument_address
 
-    def connect(self, com: str = None, identifier: str = "Your_Identifier"):
+    def connect(self, com: str = None, identifier: str = "KEITHLEY INSTRUMENTS INC.,MODEL 6482,4008415,A01   May 29 2012 09:36:59/A02  /E"):
         if com is None:
             com = self.find_instrument(identifier)
         
