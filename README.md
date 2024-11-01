@@ -10,11 +10,6 @@ To install the library use pip:
 ```bash
 pip install git+https://github.com/martinunland/picoamp_control.git
 ```
-Or download the wheel in repositories and pip:
-```bash
-pip install picoamp_control-0.1.0-py3-none-any.whl
-```
-
 
 ## Usage
 First, import the PicoampControl class, create a PicoampControl object and connect to the picoamperemeters:
