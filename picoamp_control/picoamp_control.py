@@ -1,7 +1,7 @@
 import logging
 from typing import Tuple
 import numpy as np
-import visa
+import pyvisa
 import time
 from enum import Enum
 import re
@@ -80,14 +80,16 @@ class PicoampControl:
 
     def _query(self, command: str, max_retries=100) -> str:
         log.debug(f"Query command {command}.")
+        if type(command) in [BasicCMDs, FilterCMDs]:
+            command = str(command)
         for attempt in range(max_retries):
             try:
                 return self._rm.query(command)
 
-            except visa.VisaIOError as err:
+            except pyvisa.VisaIOError as err:
                 log.warning(f"Error in query attempt {attempt + 1}: {err}")
                 self._rm.write(f"{BasicCMDs.RESET}")
-                self.config_instrument()
+                self.auto_config()
                 time.sleep(0.1)
         mssg = f"Reached maximum of {max_retries} retries. Something is wrong, check the picoamperemeter."
         log.exception(mssg)
@@ -109,7 +111,7 @@ class PicoampControl:
         Returns:
             str: The port of the identified instrument.
         """
-        rm = visa.ResourceManager()
+        rm = pyvisa.ResourceManager()
         connected_devices = rm.list_resources()
         instrument_address = None
         log.info(f"Searching for picoamperemeter's port, assuming identifier {identifier}...")
@@ -117,10 +119,11 @@ class PicoampControl:
             try:
                 with rm.open_resource(device) as temp_resource:
                     temp_resource.timeout = 3000
+                    temp_resource.read_termination = "\r"
                     instrument_info = temp_resource.query("*IDN?")
                     if re.search(identifier, instrument_info):
                         return temp_resource.resource_name
-            except (visa.VisaIOError, ValueError):
+            except (pyvisa.VisaIOError, ValueError):
                 continue
 
         if instrument_address is None:
@@ -135,7 +138,7 @@ class PicoampControl:
             com = self.find_instrument(identifier)
         
         log.info(f"Connecting to picoamperemeter on port {com}...")
-        rm = visa.ResourceManager()
+        rm = pyvisa.ResourceManager()
         self._rm = rm.open_resource(com)
         self.configure_resource_manager()
 
@@ -238,12 +241,28 @@ class PicoampControl:
         Returns:
             Tuple[np.ndarray, np.ndarray]: A tuple containing two NumPy arrays with the acquired current readings for each channel.
         """
-        self._write(f"{BasicCMDs.SWEEPS} {n}")
-        reply = self._query(BasicCMDs.READ_CURRENT)
-        reply = reply.split(",")
-        current_readings = [float(current) for current in reply]
-        ch1 = np.array(current_readings[::2])
-        ch2 = np.array(current_readings[1::2])
+        def get_n_readings(n):
+            self._write(f"{BasicCMDs.SWEEPS} {n}")
+            reply = self._query(BasicCMDs.READ_CURRENT)
+            reply = reply.split(",")
+            return [float(current) for current in reply]
+        
+        if n>10:
+            n_now = 10
+            n_missing = n
+            ch1 = np.array([])
+            ch2 = np.array([])
+            while n_missing > 0:
+                current_readings = get_n_readings(n_now)
+                ch1 = np.append(ch1, current_readings[::2])
+                ch2 = np.append(ch2, current_readings[1::2])
+                n_missing -= n_now        
+                n_now = 10 if n_missing > 10 else n_missing   
+        else: 
+            current_readings = get_n_readings(n)
+            ch1 = np.array(current_readings[::2])
+            ch2 = np.array(current_readings[1::2])
+            
         return ch1, ch2
 
     def get_mean_current(
@@ -263,9 +282,10 @@ class PicoampControl:
                 "You need at least 3 current measurements to calculate the uncertainty of the mean. Measuring with n=3..."
             )
             n = 3
+            
 
         ch1, ch2 = self.get_currents(n)
-
+            
         mean_ch1 = np.mean(ch1)
         sem_ch1 = np.std(ch1) / np.sqrt(ch1.size - 1)
 
@@ -273,3 +293,30 @@ class PicoampControl:
         sem_ch2 = np.std(ch2) / np.sqrt(ch2.size - 1)
 
         return ((mean_ch1, sem_ch1), (mean_ch2, sem_ch2))
+
+
+    def get_mean_ratio_background_substracted(self, n: int, b1: float, b2: float) -> Tuple[float, float, float, float]:
+        """
+        Calculates the mean ratio of two channels after background subtraction.
+        Args:
+            n (int): The number of current measurements to be taken.
+            b1: The background value for channel 1.
+            b2: The background value for channel 2.
+        Returns:
+            A tuple containing the mean ratio, standard error of the mean,
+            mean value of channel 1, and mean value of channel 2.
+        """
+        if n < 3:
+            log.warning(
+                "You need at least 3 current measurements to calculate the uncertainty of the mean. Measuring with n=3..."
+            )
+            n = 3
+
+        ch1, ch2 = self.get_currents(n)
+            
+        ratios = (ch1-b1)/(ch2-b2)
+
+        mean = np.mean(ratios)
+        sem = np.std(ratios) / np.sqrt(ratios.size - 1)
+
+        return (mean, sem, np.mean(ch1), np.mean(ch2))

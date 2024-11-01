@@ -41,3 +41,9 @@ Finally, you can use the get_mean_current() method to retrieve the mean and stan
 ```python
 (mean_ch1, error_ch1), (mean_ch2, error_ch2) = picoamp.get_mean_current(n=10)
 ```
+
+If you are measuring from two channels, with one of the channels being a reference of the other (i.e. you need the ratio between both channels), then you may use the method "get_mean_ratio_background_substracted()". This is more accurate than calculating the ratio from get_mean_current, since now you consider small variations in time.
+
+```python
+ratio, ratio_err, mean_ch1, mean_ch2 = picoamp.get_mean_ratio_background_substracted(n=10, background_ch1, background_ch2)
+```
